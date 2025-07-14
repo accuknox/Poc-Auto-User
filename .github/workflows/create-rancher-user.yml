@@ -31,7 +31,7 @@ jobs:
     - name: Install required collection
       run: |
         source venv/bin/activate
-        ansible-galaxy collection install -r requirements.yml
+        ansible-galaxy collection install -r rancher/requirements.yml
 
     - name: Run playbook to create Rancher user
       env:
@@ -42,4 +42,4 @@ jobs:
         FULL_NAME: ${{ github.event.inputs.full_name }}
       run: |
         source venv/bin/activate
-        ansible-playbook create_rancher_user.yml
+        ansible-playbook rancher/create_rancher_user.yml
