@@ -6,7 +6,7 @@ on:
       iam_username:
         description: 'Username to create'
         required: true
-        default: 'testuser-poc'
+        default: ''
       policy_arns:
         description: 'Comma-separated policy ARNs to attach (optional)'
         required: false
@@ -31,7 +31,7 @@ jobs:
         source venv/bin/activate
         pip install --upgrade pip
         pip install ansible boto3 botocore
-        ansible-galaxy collection install -r requirements.yml
+        ansible-galaxy collection install -r aws/requirements.yml
 
     - name: Show Ansible version & collections
       run: |
@@ -46,5 +46,5 @@ jobs:
         AWS_REGION: ${{ secrets.AWS_REGION }}
       run: |
         source venv/bin/activate
-        ansible-playbook create_iam_user.yml \
+        ansible-playbook aws/create_iam_user.yml \
           --extra-vars "new_iam_username=${{ github.event.inputs.iam_username }} policy_arns='${{ github.event.inputs.policy_arns }}'"
