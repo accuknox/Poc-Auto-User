@@ -1,0 +1,53 @@
+---
+- name: Create Rancher user and assign global role
+  hosts: localhost
+  gather_facts: no
+
+  vars:
+    rancher_api_url: "{{ lookup('env', 'RANCHER_API_URL') }}"
+    rancher_api_token: "{{ lookup('env', 'RANCHER_API_TOKEN') }}"
+    new_username: "{{ lookup('env', 'NEW_USERNAME') }}"
+    new_password: "{{ lookup('env', 'NEW_PASSWORD') }}"
+    full_name: "{{ lookup('env', 'FULL_NAME') | default(new_username) }}"
+    default_global_role: "user"  
+
+  tasks:
+    - name: Validate required variables
+      fail:
+        msg: "Username and password are required."
+      when: new_username == "" or new_password == ""
+
+    - name: Create user in Rancher
+      uri:
+        url: "{{ rancher_api_url }}/v3/users"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ rancher_api_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          username: "{{ new_username }}"
+          password: "{{ new_password }}"
+          name: "{{ full_name }}"
+          enabled: true
+        return_content: yes
+        status_code: [200, 201]    
+      register: new_user_resp
+
+    - name: Parse created user ID
+      set_fact:
+        new_user_id: "{{ (new_user_resp.json.id) | default('') }}"
+
+    - name: Bind user to global role
+      uri:
+        url: "{{ rancher_api_url }}/v3/globalrolebindings"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ rancher_api_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          globalRoleId: "{{ default_global_role }}"
+          userId: "{{ new_user_id }}"
+        return_content: yes
+        status_code: [200, 201]

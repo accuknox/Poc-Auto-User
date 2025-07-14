@@ -1,0 +1,50 @@
+name: Create IAM user
+
+on:
+  workflow_dispatch:
+    inputs:
+      iam_username:
+        description: 'Username to create'
+        required: true
+        default: 'testuser-poc'
+      policy_arns:
+        description: 'Comma-separated policy ARNs to attach (optional)'
+        required: false
+        default: ''
+
+jobs:
+  create_user:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Create virtualenv & install Ansible + amazon.aws
+      run: |
+        python -m venv venv
+        source venv/bin/activate
+        pip install --upgrade pip
+        pip install ansible boto3 botocore
+        ansible-galaxy collection install -r requirements.yml
+
+    - name: Show Ansible version & collections
+      run: |
+        source venv/bin/activate
+        ansible --version
+        ansible-galaxy collection list
+
+    - name: Run playbook
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_REGION: ${{ secrets.AWS_REGION }}
+      run: |
+        source venv/bin/activate
+        ansible-playbook create_iam_user.yml \
+          --extra-vars "new_iam_username=${{ github.event.inputs.iam_username }} policy_arns='${{ github.event.inputs.policy_arns }}'"
