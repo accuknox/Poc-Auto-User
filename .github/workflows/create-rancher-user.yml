@@ -12,6 +12,12 @@ on:
       full_name:
         description: "Full name / display name"
         required: false
+      cluster_id:
+        description: "Cluster ID (e.g. c-xxxxx)"
+        required: false
+      cluster_role_template_id:
+        description: "Cluster Role Template ID (e.g. cluster-member)"
+        required: false
 
 jobs:
   create_user:
@@ -21,25 +27,29 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Python & install Ansible
+    - name: Setup Python & Ansible
       run: |
         python -m venv venv
         source venv/bin/activate
         pip install --upgrade pip
-        pip install ansible
+        pip install ansible requests
 
-    - name: Install required collection
+    - name: Install Ansible collections
       run: |
         source venv/bin/activate
-        ansible-galaxy collection install -r rancher/requirements.yml
+        ansible-galaxy collection install -r rancher/requirements.yml || true
 
-    - name: Run playbook to create Rancher user
+    - name: Run Ansible playbook to create Rancher user
       env:
         RANCHER_API_URL: ${{ secrets.RANCHER_API_URL }}
         RANCHER_API_TOKEN: ${{ secrets.RANCHER_API_TOKEN }}
+        VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+        VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
         NEW_USERNAME: ${{ github.event.inputs.new_username }}
         NEW_PASSWORD: ${{ github.event.inputs.new_password }}
         FULL_NAME: ${{ github.event.inputs.full_name }}
+        CLUSTER_ID: ${{ github.event.inputs.cluster_id }}
+        CLUSTER_ROLE_TEMPLATE_ID: ${{ github.event.inputs.cluster_role_template_id }}
       run: |
         source venv/bin/activate
         ansible-playbook rancher/create_rancher_user.yml
