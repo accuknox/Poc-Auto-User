@@ -32,19 +32,28 @@ jobs:
         python -m venv venv
         source venv/bin/activate
         pip install --upgrade pip
-        pip install ansible requests
+        pip install ansible requests hvac
 
-    - name: Install Ansible collections
+    - name: Vault Login and Export Token
+      id: vault_login
+      env:
+        VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+        VAULT_USERNAME: ${{ secrets.VAULT_USERNAME }}
+        VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
       run: |
-        source venv/bin/activate
-        ansible-galaxy collection install -r rancher/requirements.yml || true
+        echo "Logging into Vault with userpass..."
+        export VAULT_TOKEN=$(curl --request POST \
+          --data "{\"password\": \"${VAULT_PASSWORD}\"}" \
+          ${VAULT_ADDR}/v1/auth/backup/userpass/${VAULT_USERNAME}/login | jq -r .auth.client_token)
 
-    - name: Run Ansible playbook to create Rancher user
+        echo "VAULT_TOKEN=$VAULT_TOKEN" >> $GITHUB_ENV
+
+    - name: Run Ansible Playbook
       env:
         RANCHER_API_URL: ${{ secrets.RANCHER_API_URL }}
         RANCHER_API_TOKEN: ${{ secrets.RANCHER_API_TOKEN }}
         VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
-        VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+        VAULT_TOKEN: ${{ env.VAULT_TOKEN }}
         NEW_USERNAME: ${{ github.event.inputs.new_username }}
         NEW_PASSWORD: ${{ github.event.inputs.new_password }}
         FULL_NAME: ${{ github.event.inputs.full_name }}
