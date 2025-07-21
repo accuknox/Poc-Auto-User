@@ -1,28 +1,25 @@
 ---
-- name: Create Rancher user and assign global role
+- name: Create Rancher User and assign cluster access
   hosts: localhost
-  gather_facts: no
-
+  gather_facts: false
   vars:
-    rancher_api_url: "{{ lookup('env', 'RANCHER_API_URL') }}"
-    rancher_api_token: "{{ lookup('env', 'RANCHER_API_TOKEN') }}"
+    rancher_url: "{{ lookup('env', 'RANCHER_API_URL') }}"
+    rancher_token: "{{ lookup('env', 'RANCHER_API_TOKEN') }}"
+    vault_addr: "{{ lookup('env', 'VAULT_ADDR') }}"
+    vault_token: "{{ lookup('env', 'VAULT_TOKEN') }}"
     new_username: "{{ lookup('env', 'NEW_USERNAME') }}"
     new_password: "{{ lookup('env', 'NEW_PASSWORD') }}"
-    full_name: "{{ lookup('env', 'FULL_NAME') | default(new_username) }}"
-    default_global_role: "user"  
+    full_name: "{{ lookup('env', 'FULL_NAME') }}"
+    cluster_id: "{{ lookup('env', 'CLUSTER_ID') }}"
+    cluster_role_template_id: "{{ lookup('env', 'CLUSTER_ROLE_TEMPLATE_ID') }}"
 
   tasks:
-    - name: Validate required variables
-      fail:
-        msg: "Username and password are required."
-      when: new_username == "" or new_password == ""
-
-    - name: Create user in Rancher
+    - name: Create Rancher user
       uri:
-        url: "{{ rancher_api_url }}/v3/users"
+        url: "{{ rancher_url }}/v3/users"
         method: POST
         headers:
-          Authorization: "Bearer {{ rancher_api_token }}"
+          Authorization: "Bearer {{ rancher_token }}"
           Content-Type: "application/json"
         body_format: json
         body:
@@ -30,24 +27,36 @@
           password: "{{ new_password }}"
           name: "{{ full_name }}"
           enabled: true
-        return_content: yes
-        status_code: [200, 201]    
-      register: new_user_resp
+        status_code: [201, 409]
+      register: create_user_response
+      no_log: true
 
-    - name: Parse created user ID
-      set_fact:
-        new_user_id: "{{ (new_user_resp.json.id) | default('') }}"
-
-    - name: Bind user to global role
+    - name: Store Rancher credentials in Vault
       uri:
-        url: "{{ rancher_api_url }}/v3/globalrolebindings"
+        url: "{{ vault_addr }}/v1/secret/data/rancher/{{ new_username }}"
         method: POST
         headers:
-          Authorization: "Bearer {{ rancher_api_token }}"
+          X-Vault-Token: "{{ vault_token }}"
           Content-Type: "application/json"
         body_format: json
         body:
-          globalRoleId: "{{ default_global_role }}"
-          userId: "{{ new_user_id }}"
-        return_content: yes
-        status_code: [200, 201]
+          data:
+            username: "{{ new_username }}"
+            password: "{{ new_password }}"
+        status_code: [200, 204]
+      no_log: true
+
+    - name: Assign cluster role to user
+      uri:
+        url: "{{ rancher_url }}/v3/clusterroletemplatebindings"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ rancher_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          clusterId: "{{ cluster_id }}"
+          roleTemplateId: "{{ cluster_role_template_id }}"
+          userPrincipalId: "local://{{ new_username }}"
+        status_code: [201, 409]
+      no_log: true
