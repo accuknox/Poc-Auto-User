@@ -33,7 +33,7 @@
 
     - name: Store Rancher credentials in Vault
       uri:
-        url: "{{ vault_addr }}/v1/secret/data/rancher/{{ new_username }}"
+        url: "{{ vault_addr }}/v1/Admin-Credentials/gh_secret"
         method: POST
         headers:
           X-Vault-Token: "{{ vault_token }}"
