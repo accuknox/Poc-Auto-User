@@ -41,9 +41,26 @@
         user_id: "{{ create_user_response.json.id }}"
       when: create_user_response.status == 201
 
-    - name: Store Rancher credentials in Vault (Debug Mode)
+    - name: Check if user already exists in Vault
       uri:
-        url: "{{ vault_addr }}/v1/Admin-Credentials/gh_secret"
+        url: "{{ vault_addr }}/v1/Admin-Credentials/rancher/{{ new_username }}"
+        method: GET
+        headers:
+          X-Vault-Token: "{{ vault_token }}"
+          Content-Type: "application/json"
+        status_code: [200, 404]
+      register: vault_check
+      ignore_errors: yes
+      no_log: true
+
+    - name: Fail if Vault user exists
+      fail:
+        msg: "User {{ new_username }} already exists in Vault!"
+      when: vault_check.status == 200
+
+    - name: Store Rancher credentials in Vault (per-user path)
+      uri:
+        url: "{{ vault_addr }}/v1/Admin-Credentials/rancher/{{ new_username }}"
         method: POST
         headers:
           X-Vault-Token: "{{ vault_token }}"
@@ -54,12 +71,8 @@
             username: "{{ new_username }}"
             password: "{{ new_password }}"
         status_code: [200, 204]
-      register: vault_response
-      ignore_errors: yes  # Continue even if this fails
-
-    - name: Debug Vault Response
-      debug:
-        msg: "Vault Response: {{ vault_response }}"
+      when: create_user_response.status == 201
+      no_log: true
 
     - name: Assign cluster role to user (if cluster_id provided)
       uri:
