@@ -47,7 +47,7 @@ jobs:
         echo "Logging into Vault..."
         RESPONSE=$(curl --fail --request POST \
           --data "{\"password\": \"${VAULT_PASSWORD}\"}" \
-          ${VAULT_ADDR}/v1/auth/userpass/login/${VAULT_USERNAME})
+          ${VAULT_ADDR}/v1/auth/backup/userpass/login/${VAULT_USERNAME})
         echo "Vault Response: $RESPONSE"  # Debug
         export VAULT_TOKEN=$(echo "$RESPONSE" | jq -r '.auth.client_token')
         echo "VAULT_TOKEN=${VAULT_TOKEN}" >> $GITHUB_ENV
