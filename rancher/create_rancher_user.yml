@@ -10,8 +10,8 @@
     new_username: "{{ lookup('env', 'NEW_USERNAME') }}"
     new_password: "{{ lookup('env', 'NEW_PASSWORD') }}"
     full_name: "{{ lookup('env', 'FULL_NAME') }}"
-    cluster_id: "{{ lookup('env', 'CLUSTER_ID') }}"
-    cluster_role_template_id: "{{ lookup('env', 'CLUSTER_ROLE_TEMPLATE_ID') }}"
+    cluster_id: "{{ lookup('env', 'CLUSTER_ID') | default('') }}"
+    cluster_role_template_id: "{{ lookup('env', 'CLUSTER_ROLE_TEMPLATE_ID') | default('') }}"
 
   tasks:
     - name: Create Rancher user
@@ -31,7 +31,17 @@
       register: create_user_response
       no_log: true
 
-    - name: Store Rancher credentials in Vault
+    - name: Fail if user creation failed
+      fail:
+        msg: "Failed to create user: HTTP {{ create_user_response.status }}"
+      when: create_user_response.status not in [201, 409]
+
+    - name: Get user ID if created
+      set_fact:
+        user_id: "{{ create_user_response.json.id }}"
+      when: create_user_response.status == 201
+
+    - name: Store Rancher credentials in Vault (Debug Mode)
       uri:
         url: "{{ vault_addr }}/v1/Admin-Credentials/gh_secret"
         method: POST
@@ -44,9 +54,14 @@
             username: "{{ new_username }}"
             password: "{{ new_password }}"
         status_code: [200, 204]
-      no_log: true
+      register: vault_response
+      ignore_errors: yes  # Continue even if this fails
 
-    - name: Assign cluster role to user
+    - name: Debug Vault Response
+      debug:
+        msg: "Vault Response: {{ vault_response }}"
+
+    - name: Assign cluster role to user (if cluster_id provided)
       uri:
         url: "{{ rancher_url }}/v3/clusterroletemplatebindings"
         method: POST
@@ -57,6 +72,9 @@
         body:
           clusterId: "{{ cluster_id }}"
           roleTemplateId: "{{ cluster_role_template_id }}"
-          userPrincipalId: "local://{{ new_username }}"
+          userPrincipalId: "local://{{ user_id }}"
         status_code: [201, 409]
+      when: 
+        - user_id is defined
+        - cluster_id | length > 0
       no_log: true
