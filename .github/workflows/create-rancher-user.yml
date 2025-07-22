@@ -37,6 +37,11 @@ jobs:
         pip install --upgrade pip
         pip install ansible requests hvac
 
+    - name: Mask sensitive inputs
+      run: |
+        echo "::add-mask::${{ github.event.inputs.new_username }}"
+        echo "::add-mask::${{ github.event.inputs.new_password }}"
+
     - name: Vault Login and Export Token
       id: vault_login
       env:
@@ -50,6 +55,7 @@ jobs:
           ${VAULT_ADDR}/v1/auth/backup/userpass/login/${VAULT_USERNAME})
         echo "Vault Response: $RESPONSE"  # Debug
         export VAULT_TOKEN=$(echo "$RESPONSE" | jq -r '.auth.client_token')
+        echo "::add-mask::$VAULT_TOKEN"
         echo "VAULT_TOKEN=${VAULT_TOKEN}" >> $GITHUB_ENV
         echo "Token exported to GITHUB_ENV"
 
@@ -66,4 +72,4 @@ jobs:
         CLUSTER_ROLE_TEMPLATE_ID: ${{ github.event.inputs.cluster_role_template_id }}
       run: |
         source venv/bin/activate
-        ansible-playbook rancher/create_rancher_user.yml 
+        ansible-playbook rancher/create_rancher_user.yml
