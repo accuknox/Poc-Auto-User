@@ -27,6 +27,9 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Install jq
+      run: sudo apt-get install -y jq
+
     - name: Setup Python & Ansible
       run: |
         python -m venv venv
@@ -41,12 +44,14 @@ jobs:
         VAULT_USERNAME: ${{ secrets.VAULT_USERNAME }}
         VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
       run: |
-        echo "Logging into Vault with userpass..."
-        export VAULT_TOKEN=$(curl --request POST \
+        echo "Logging into Vault..."
+        RESPONSE=$(curl --fail --request POST \
           --data "{\"password\": \"${VAULT_PASSWORD}\"}" \
-          ${VAULT_ADDR}/v1/auth/backup/userpass/${VAULT_USERNAME}/login | jq -r .auth.client_token)
-
-        echo "VAULT_TOKEN=$VAULT_TOKEN" >> $GITHUB_ENV
+          ${VAULT_ADDR}/v1/auth/userpass/login/${VAULT_USERNAME})
+        echo "Vault Response: $RESPONSE"  # Debug
+        export VAULT_TOKEN=$(echo "$RESPONSE" | jq -r '.auth.client_token')
+        echo "VAULT_TOKEN=${VAULT_TOKEN}" >> $GITHUB_ENV
+        echo "Token exported to GITHUB_ENV"
 
     - name: Run Ansible Playbook
       env:
@@ -61,4 +66,5 @@ jobs:
         CLUSTER_ROLE_TEMPLATE_ID: ${{ github.event.inputs.cluster_role_template_id }}
       run: |
         source venv/bin/activate
-        ansible-playbook rancher/create_rancher_user.yml
+        echo "VAULT_TOKEN (in Ansible step): $VAULT_TOKEN"  # Debug
+        ansible-playbook rancher/create_rancher_user.yml -vvv
