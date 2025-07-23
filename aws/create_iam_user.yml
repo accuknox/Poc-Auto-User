@@ -20,7 +20,7 @@
       register: iam_user
 
     - name: Create console login profile
-      amazon.aws.iam_login_profile:
+      community.aws.iam_login_profile:
         user_name: "{{ new_iam_username }}"
         password: "{{ console_password }}"
         state: present
