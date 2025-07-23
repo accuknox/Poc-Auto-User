@@ -33,7 +33,7 @@
         executable: /bin/bash
       when: create_console_access | bool
       register: console_login
-      no_log: false
+      no_log: true
       environment:
         AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
         AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
@@ -45,12 +45,7 @@
         state: present
       when: create_programmatic_access | bool
       register: access_keys
-      no_log: false
-
-    - name: Debug access keys output
-      debug:
-        var: access_keys
-      when: create_programmatic_access | bool
+      no_log: true
 
     - name: Store credentials in Vault
       uri:
@@ -68,4 +63,4 @@
             secret_key: "{{ access_keys.secret_access_key | default('N/A') }}"
             policies: "{{ policy_arns_list }}"
         status_code: [200, 204]
-      no_log: false
+      no_log: true
