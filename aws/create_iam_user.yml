@@ -1,5 +1,5 @@
 ---
-- name: Create IAM user with full access capabilities
+- name: Create IAM user 
   hosts: localhost
   connection: local
   gather_facts: false
