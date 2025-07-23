@@ -5,12 +5,16 @@
   gather_facts: false
   vars:
     vault_path: "Admin-Credentials/aws_dev/{{ new_iam_username }}"
-    console_password: "{{ lookup('password', '/dev/null length=20 chars=ascii_letters,digits,punctuation') }}"
 
   tasks:
     - name: Convert policy ARNs to list
       set_fact:
         policy_arns_list: "{{ policy_arns.split(',') if policy_arns | default('') | trim | length > 0 else [] }}"
+
+    - name: Generate console password
+      set_fact:
+        console_password: "{{ lookup('community.general.random_string', length=20, special=true) }}"
+      when: create_console_access | bool
 
     - name: Create IAM user
       amazon.aws.iam_user:
@@ -19,13 +23,21 @@
         managed_policy: "{{ policy_arns_list }}"
       register: iam_user
 
-    - name: Create console login profile
-      community.aws.iam_login_profile:
-        user_name: "{{ new_iam_username }}"
-        password: "{{ console_password }}"
-        state: present
+    - name: Create console login via AWS CLI
+      ansible.builtin.shell: |
+        aws iam create-login-profile \
+          --user-name "{{ new_iam_username }}" \
+          --password "{{ console_password }}" \
+          --no-password-reset-required
+      args:
+        executable: /bin/bash
       when: create_console_access | bool
       register: console_login
+      no_log: true
+      environment:
+        AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+        AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+        AWS_REGION: "{{ lookup('env', 'AWS_REGION') }}"
 
     - name: Create access keys
       amazon.aws.iam_access_key:
@@ -37,7 +49,7 @@
 
     - name: Store credentials in Vault
       uri:
-        url: "{{ vault_addr }}/v1/{{ vault_path }}"
+        url: "{{ vault_addr.rstrip('/') }}/v1/{{ vault_path }}"
         method: POST
         headers:
           X-Vault-Token: "{{ vault_token }}"
@@ -47,8 +59,8 @@
           data:
             username: "{{ new_iam_username }}"
             password: "{{ console_password if create_console_access | bool else 'N/A' }}"
-            access_key: "{{ access_keys.access_key.access_key_id if create_programmatic_access | bool else 'N/A' }}"
-            secret_key: "{{ access_keys.access_key.secret_access_key if create_programmatic_access | bool else 'N/A' }}"
+            access_key: "{{ access_keys.access_key.access_key_id | default('N/A') }}"
+            secret_key: "{{ access_keys.access_key.secret_access_key | default('N/A') }}"
             policies: "{{ policy_arns_list }}"
         status_code: [200, 204]
       no_log: true
