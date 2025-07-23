@@ -26,13 +26,16 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
+    - name: Install required packages (jq)
+      run: sudo apt-get update && sudo apt-get install -y jq
+
     - name: Setup Python & Ansible
       run: |
         python -m venv venv
         source venv/bin/activate
         pip install --upgrade pip
         pip install ansible boto3 botocore hvac
-        ansible-galaxy collection install amazon.aws community.aws
+        ansible-galaxy collection install amazon.aws community.aws community.general
 
     - name: Mask sensitive values
       run: |
@@ -49,8 +52,9 @@ jobs:
         RESPONSE=$(curl -s -X POST \
           -d "{\"password\":\"${VAULT_PASSWORD}\"}" \
           "${VAULT_ADDR}/v1/auth/backup/userpass/login/${VAULT_USERNAME}")
-        echo "VAULT_TOKEN=$(echo "$RESPONSE" | jq -r '.auth.client_token')" >> $GITHUB_ENV
-        echo "::add-mask::$VAULT_TOKEN"
+        TOKEN=$(echo "$RESPONSE" | jq -r '.auth.client_token')
+        echo "VAULT_TOKEN=$TOKEN" >> $GITHUB_ENV
+        echo "::add-mask::$TOKEN"
 
     - name: Run playbook
       env:
@@ -62,7 +66,7 @@ jobs:
       run: |
         source venv/bin/activate
         ansible-playbook aws/create_iam_user.yml \
-          --extra-vars "new_iam_username=${{ github.event.inputs.iam_username }} \
+          --extra-vars "new_iam_username='${{ github.event.inputs.iam_username }}' \
                         policy_arns='${{ github.event.inputs.policy_arns }}' \
                         create_console_access=${{ github.event.inputs.create_console_access }} \
                         create_programmatic_access=${{ github.event.inputs.create_programmatic_access }}"
