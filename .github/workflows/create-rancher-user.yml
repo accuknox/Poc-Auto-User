@@ -12,6 +12,12 @@ on:
       full_name:
         description: "Full name / display name"
         required: false
+      cluster_id:
+        description: "Cluster ID (e.g. c-xxxxx)"
+        required: false
+      cluster_role_template_id:
+        description: "Cluster Role Template ID (e.g. cluster-member)"
+        required: false
 
 jobs:
   create_user:
@@ -21,25 +27,49 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Python & install Ansible
+    - name: Install jq
+      run: sudo apt-get install -y jq
+
+    - name: Setup Python & Ansible
       run: |
         python -m venv venv
         source venv/bin/activate
         pip install --upgrade pip
-        pip install ansible
+        pip install ansible requests hvac
 
-    - name: Install required collection
+    - name: Mask sensitive inputs
       run: |
-        source venv/bin/activate
-        ansible-galaxy collection install -r rancher/requirements.yml
+        echo "::add-mask::${{ github.event.inputs.new_username }}"
+        echo "::add-mask::${{ github.event.inputs.new_password }}"
 
-    - name: Run playbook to create Rancher user
+    - name: Vault Login and Export Token
+      id: vault_login
+      env:
+        VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+        VAULT_USERNAME: ${{ secrets.VAULT_USERNAME }}
+        VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
+      run: |
+        echo "Logging into Vault..."
+        RESPONSE=$(curl --fail --request POST \
+          --data "{\"password\": \"${VAULT_PASSWORD}\"}" \
+          ${VAULT_ADDR}/v1/auth/backup/userpass/login/${VAULT_USERNAME})
+        echo "Vault Response: $RESPONSE"  # Debug
+        export VAULT_TOKEN=$(echo "$RESPONSE" | jq -r '.auth.client_token')
+        echo "::add-mask::$VAULT_TOKEN"
+        echo "VAULT_TOKEN=${VAULT_TOKEN}" >> $GITHUB_ENV
+        echo "Token exported to GITHUB_ENV"
+
+    - name: Run Ansible Playbook
       env:
         RANCHER_API_URL: ${{ secrets.RANCHER_API_URL }}
         RANCHER_API_TOKEN: ${{ secrets.RANCHER_API_TOKEN }}
+        VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+        VAULT_TOKEN: ${{ env.VAULT_TOKEN }}
         NEW_USERNAME: ${{ github.event.inputs.new_username }}
         NEW_PASSWORD: ${{ github.event.inputs.new_password }}
         FULL_NAME: ${{ github.event.inputs.full_name }}
+        CLUSTER_ID: ${{ github.event.inputs.cluster_id }}
+        CLUSTER_ROLE_TEMPLATE_ID: ${{ github.event.inputs.cluster_role_template_id }}
       run: |
         source venv/bin/activate
         ansible-playbook rancher/create_rancher_user.yml
