@@ -1,4 +1,4 @@
-name: Create IAM user
+name: Create IAM user with full access
 
 on:
   workflow_dispatch:
@@ -6,45 +6,63 @@ on:
       iam_username:
         description: 'Username to create'
         required: true
-        default: ''
       policy_arns:
         description: 'Comma-separated policy ARNs to attach (optional)'
         required: false
         default: ''
+      create_console_access:
+        description: 'Create console access (true/false)'
+        required: false
+        default: 'true'
+      create_programmatic_access:
+        description: 'Create access keys (true/false)'
+        required: false
+        default: 'true'
 
 jobs:
   create_user:
     runs-on: ubuntu-latest
-
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-
-    - name: Create virtualenv & install Ansible + amazon.aws
+    - name: Setup Python & Ansible
       run: |
         python -m venv venv
         source venv/bin/activate
         pip install --upgrade pip
-        pip install ansible boto3 botocore
-        ansible-galaxy collection install -r aws/requirements.yml
+        pip install ansible boto3 botocore hvac
+        ansible-galaxy collection install amazon.aws community.aws
 
-    - name: Show Ansible version & collections
+    - name: Mask sensitive values
       run: |
-        source venv/bin/activate
-        ansible --version
-        ansible-galaxy collection list
+        echo "::add-mask::${{ github.event.inputs.iam_username }}"
+        echo "Sensitive values masked"
+
+    - name: Vault Login
+      id: vault_login
+      env:
+        VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+        VAULT_USERNAME: ${{ secrets.VAULT_USERNAME }}
+        VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
+      run: |
+        RESPONSE=$(curl -s -X POST \
+          -d "{\"password\":\"${VAULT_PASSWORD}\"}" \
+          "${VAULT_ADDR}/v1/auth/backup/userpass/login/${VAULT_USERNAME}")
+        echo "VAULT_TOKEN=$(echo "$RESPONSE" | jq -r '.auth.client_token')" >> $GITHUB_ENV
+        echo "::add-mask::$VAULT_TOKEN"
 
     - name: Run playbook
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_REGION: ${{ secrets.AWS_REGION }}
+        VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+        VAULT_TOKEN: ${{ env.VAULT_TOKEN }}
       run: |
         source venv/bin/activate
         ansible-playbook aws/create_iam_user.yml \
-          --extra-vars "new_iam_username=${{ github.event.inputs.iam_username }} policy_arns='${{ github.event.inputs.policy_arns }}'"
+          --extra-vars "new_iam_username=${{ github.event.inputs.iam_username }} \
+                        policy_arns='${{ github.event.inputs.policy_arns }}' \
+                        create_console_access=${{ github.event.inputs.create_console_access }} \
+                        create_programmatic_access=${{ github.event.inputs.create_programmatic_access }}"
