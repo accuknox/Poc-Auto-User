@@ -1,16 +1,54 @@
 ---
-- name: Create IAM user and optionally attach policies
+- name: Create IAM user with full access capabilities
   hosts: localhost
   connection: local
   gather_facts: false
-  tasks:
+  vars:
+    vault_path: "Admin-Credentials/aws_dev/{{ new_iam_username }}"
+    console_password: "{{ lookup('password', '/dev/null length=20 chars=ascii_letters,digits,punctuation') }}"
 
-    - name: Convert comma-separated string to list (if provided)
+  tasks:
+    - name: Convert policy ARNs to list
       set_fact:
         policy_arns_list: "{{ policy_arns.split(',') if policy_arns | default('') | trim | length > 0 else [] }}"
 
-    - name: Create new IAM user and attach policies if provided
+    - name: Create IAM user
       amazon.aws.iam_user:
         name: "{{ new_iam_username }}"
         state: present
         managed_policy: "{{ policy_arns_list }}"
+      register: iam_user
+
+    - name: Create console login profile
+      amazon.aws.iam_login_profile:
+        user_name: "{{ new_iam_username }}"
+        password: "{{ console_password }}"
+        state: present
+      when: create_console_access | bool
+      register: console_login
+
+    - name: Create access keys
+      amazon.aws.iam_access_key:
+        user_name: "{{ new_iam_username }}"
+        state: present
+      when: create_programmatic_access | bool
+      register: access_keys
+      no_log: true
+
+    - name: Store credentials in Vault
+      uri:
+        url: "{{ vault_addr }}/v1/{{ vault_path }}"
+        method: POST
+        headers:
+          X-Vault-Token: "{{ vault_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          data:
+            username: "{{ new_iam_username }}"
+            password: "{{ console_password if create_console_access | bool else 'N/A' }}"
+            access_key: "{{ access_keys.access_key.access_key_id if create_programmatic_access | bool else 'N/A' }}"
+            secret_key: "{{ access_keys.access_key.secret_access_key if create_programmatic_access | bool else 'N/A' }}"
+            policies: "{{ policy_arns_list }}"
+        status_code: [200, 204]
+      no_log: true
