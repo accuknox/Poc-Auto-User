@@ -64,8 +64,8 @@
           data:
             username: "{{ new_iam_username }}"
             password: "{{ console_password if create_console_access | bool else 'N/A' }}"
-            access_key: "{{ access_keys.access_key.access_key_id | default('N/A') }}"
-            secret_key: "{{ access_keys.access_key.secret_access_key | default('N/A') }}"
+            access_key: "{{ access_keys.access_key_id | default('N/A') }}"
+            secret_key: "{{ access_keys.secret_access_key | default('N/A') }}"
             policies: "{{ policy_arns_list }}"
         status_code: [200, 204]
       no_log: false
