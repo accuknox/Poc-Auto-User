@@ -13,7 +13,7 @@
 
     - name: Generate console password
       set_fact:
-        console_password: "{{ lookup('community.general.random_string', length=20, special=true) }}"
+        console_password: "{{ lookup('community.general.random_string', length=20, special=true, override_special='@#$%^&*_+=') }}"
       when: create_console_access | bool
 
     - name: Create IAM user
