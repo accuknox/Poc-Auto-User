@@ -33,7 +33,7 @@
         executable: /bin/bash
       when: create_console_access | bool
       register: console_login
-      no_log: true
+      no_log: false
       environment:
         AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
         AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
