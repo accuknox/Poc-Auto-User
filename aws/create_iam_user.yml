@@ -13,13 +13,8 @@
 
     - name: Generate AWS-compliant console password
       set_fact:
-        console_password: >-
-          {{ 
-            lookup('community.general.random_string', length=17, special=false) +
-            lookup('community.general.random_string', length=1, special=true, override_special='@_') +
-            lookup('community.general.random_string', length=2, special=false, digits=true, upper=true, lower=false)
-          }}
-
+        console_password: "{{ lookup('password', '/dev/null length=20 chars=ascii_letters,digits') }}{{ ['!','@','#','$','%','^','&','*','()','_','+','-','='] | random }}"  
+      
     - name: Create IAM user
       amazon.aws.iam_user:
         name: "{{ new_iam_username }}"
