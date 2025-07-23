@@ -1,4 +1,4 @@
-name: Create IAM user with full access
+name: Create IAM user 
 
 on:
   workflow_dispatch:
