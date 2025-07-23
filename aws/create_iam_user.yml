@@ -45,7 +45,12 @@
         state: present
       when: create_programmatic_access | bool
       register: access_keys
-      no_log: true
+      no_log: false
+
+    - name: Debug access keys output
+      debug:
+        var: access_keys
+      when: create_programmatic_access | bool
 
     - name: Store credentials in Vault
       uri:
