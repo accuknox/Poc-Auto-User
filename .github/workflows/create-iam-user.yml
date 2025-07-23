@@ -69,4 +69,6 @@ jobs:
           --extra-vars "new_iam_username='${{ github.event.inputs.iam_username }}' \
                         policy_arns='${{ github.event.inputs.policy_arns }}' \
                         create_console_access=${{ github.event.inputs.create_console_access }} \
-                        create_programmatic_access=${{ github.event.inputs.create_programmatic_access }}"
+                        create_programmatic_access=${{ github.event.inputs.create_programmatic_access }} \
+                        vault_addr='${{ secrets.VAULT_ADDR }}' \
+                        vault_token='${{ env.VAULT_TOKEN }}'"
