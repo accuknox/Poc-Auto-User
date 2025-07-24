@@ -45,19 +45,26 @@ jobs:
     - name: Vault Login and Export Token
       id: vault_login
       env:
-        VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
-        VAULT_USERNAME: ${{ secrets.VAULT_USERNAME }}
-        VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
+       VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+       VAULT_USERNAME: ${{ secrets.VAULT_USERNAME }}
+       VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
       run: |
-        echo "Logging into Vault..."
-        RESPONSE=$(curl --fail --request POST \
-          --data "{\"password\": \"${VAULT_PASSWORD}\"}" \
+        echo "Logging into Vault (credentials masked)..."
+        # Get response without showing sensitive data
+        RESPONSE=$(curl --fail --silent --request POST \
+          --data "{\"password\":\"${VAULT_PASSWORD}\"}" \
           ${VAULT_ADDR}/v1/auth/backup/userpass/login/${VAULT_USERNAME})
-        echo "Vault Response: $RESPONSE"  # Debug
+    
+        # Extract and mask token immediately
         export VAULT_TOKEN=$(echo "$RESPONSE" | jq -r '.auth.client_token')
         echo "::add-mask::$VAULT_TOKEN"
         echo "VAULT_TOKEN=${VAULT_TOKEN}" >> $GITHUB_ENV
-        echo "Token exported to GITHUB_ENV"
+    
+        # Show sanitized response for debugging
+        SANITIZED_RESPONSE=$(echo "$RESPONSE" | jq 'del(.auth.client_token)')
+        echo "Vault Response: ${SANITIZED_RESPONSE}"
+    
+        echo "Vault token obtained and masked successfully"
 
     - name: Run Ansible Playbook
       env:
